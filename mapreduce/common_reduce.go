@@ -1,5 +1,13 @@
 package mapreduce
 
+import (
+	"encoding/json"
+	"os"
+	"io"
+	"sort"
+)
+
+
 func doReduce(
 	jobName string, // the name of the whole MapReduce job
 	reduceTask int, // which reduce task this is
@@ -44,4 +52,63 @@ func doReduce(
 	//
 	// Your code here (Part #I).
 	//
+
+
+
+
+
+	
+	// create a map with word -> slice of all values
+	counts := make(map[string][]string)
+	// iterate from 0 to nMap
+	for m:=0; m < nMap; m++{
+		fileName := reduceName(jobName, m, reduceTask)
+		readFile, err := os.Open(fileName)
+		if err != nil {
+			debug("Error opening file: %v\n", err)
+		}
+		
+		//must decode the file from JSON
+		dec := json.NewDecoder(readFile)
+		
+		// iterate decode the JSON and create KeyValue structs for each pair, append it to the slice with the unique key
+		for {
+			var kv KeyValue
+			err := dec.Decode(&kv)
+			if err == io.EOF{
+				break
+			}
+			if err != nil {
+				debug("Error reading file: %v\n", err)
+				continue
+			}
+			counts[kv.Key] = append(counts[kv.Key], kv.Value)
+		}
+		readFile.Close()
+	}
+	
+	// slice of only keys to sort
+	keys := []string{}
+	for k := range counts {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) //sort in asc. order
+
+	// create output file and encoder to write to it
+	writeFile, err := os.Create(outFile)
+	if err != nil {
+		debug("Error creating file: %v\n", err)
+	}
+	enc := json.NewEncoder(writeFile)
+
+
+	//call reduce on sorted strings
+	for _, k := range keys {
+		//writes directly to the output file after calling reduce
+		err := enc.Encode(KeyValue{k, reduceF(k, counts[k])})
+		if err != nil {
+			debug("Error writing to file: %v\n", err)
+		}
+	}
+	writeFile.Close()
 }

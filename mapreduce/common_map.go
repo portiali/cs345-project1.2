@@ -1,7 +1,11 @@
 package mapreduce
 
+
 import (
+	"encoding/json"
 	"hash/fnv"
+	"os"
+	"io"
 )
 
 func doMap(
@@ -52,6 +56,50 @@ func doMap(
 	//
 	// Your code here (Part #I).
 	//
+	
+	// open input file
+	inputFile, err := os.Open(inFile)
+	if err != nil {
+		debug("Error opening file: %v\n", err)
+	}
+	defer inputFile.Close() //will close file after function finishes
+
+	fileData, err := io.ReadAll(inputFile) //reads BYTES from the opened input file
+	if err != nil {
+		debug("Error reading file: %v\n", err)
+	}
+	// call mapF
+	keyValues := mapF(inFile, string(fileData)) //convert bytes to string
+
+	//to partition:
+	//create all files and encoders for each KeyValue and store in a slice
+	files := make([]*os.File, nReduce) //slice of pointers to os File of size nReduce
+	encoders := make([]*json.Encoder, nReduce) //slice of pointers to json Encoders of size nReduce
+	for r:= 0; r < nReduce; r++ {
+		fileName := reduceName(jobName, mapTask, r)
+		file, err := os.Create(fileName)
+		if err != nil {
+			debug("Error creating file: %v\n", err)
+		}
+		files[r] = file //file is a pointer to the created file
+		encoders[r] = json.NewEncoder(file) //pointer to encoder
+	}
+
+	//write to all files
+	for _, kv := range keyValues {
+		r := ihash(kv.Key) % nReduce
+		enc := encoders[r]
+		err := enc.Encode(&kv)
+		if err != nil{
+			debug("Error writing to file: %v\n", err)
+		}
+	}
+
+	//close all files
+	for _, f := range files{
+		f.Close()
+	}
+
 }
 
 func ihash(s string) int {
