@@ -42,28 +42,37 @@ func schedule(jobName string, mapFiles []string, nReduce int, phase jobPhase, re
 		// spawn a goroutine for the task
 		go func (task int){
 			defer wg.Done() // mark this specific task as done only when the function is over
-			worker := <- registerChan
-			args := DoTaskArgs{
-				JobName: jobName,
-				File: "",
-				Phase: phase,
-				TaskNumber: task,
-				NumOtherPhase: n_other,
-			}
 
-			// only access the mapFiles if we are in map phase, otherwise leave arg as ""
-			if phase == mapPhase{
-				args.File = mapFiles[task]
-			}
+			// infinite for loop for task retry until success
+			for {
+				// fmt.Printf("waiting on worker :(")
+				worker := <-registerChan
+				fmt.Println("Task", task, "got worker", worker)
+				args := DoTaskArgs{
+					JobName: jobName,
+					File: "",
+					Phase: phase,
+					TaskNumber: task,
+					NumOtherPhase: n_other,
+				}
 
-			var reply struct{}
-			call(worker, "Worker.DoTask", &args, &reply)
-			// TO-DO: do worker failure handling when success if false
-			// success := call(worker, "Worker.DoTask", &args, &reply)
-			registerChan <- worker //add the worker back to the channel
-			
+				// only access the mapFiles if we are in map phase, otherwise leave arg as ""
+				if phase == mapPhase{
+					args.File = mapFiles[task]
+				}
+
+				var reply struct{}
+				success := call(worker, "Worker.DoTask", &args, &reply)
+				fmt.Println("Task", task, "success:", success)
+				// task completed, return worker, and break
+				go func(){registerChan <- worker} () //return the worker async so it doesn't block on channel
+				if success {
+					break
+				} 
+			}
 			
 		} (i) //passes in i as the arg to the anonymous function
+		
 
 		
 	}
