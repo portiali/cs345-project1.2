@@ -47,7 +47,7 @@ func schedule(jobName string, mapFiles []string, nReduce int, phase jobPhase, re
 			for {
 				// fmt.Printf("waiting on worker :(")
 				worker := <-registerChan
-				fmt.Println("Task", task, "got worker", worker)
+				debug("Task %d got worker %s", task, worker)
 				args := DoTaskArgs{
 					JobName: jobName,
 					File: "",
@@ -63,7 +63,7 @@ func schedule(jobName string, mapFiles []string, nReduce int, phase jobPhase, re
 
 				var reply struct{}
 				success := call(worker, "Worker.DoTask", &args, &reply)
-				fmt.Println("Task", task, "success:", success)
+				debug("Task %d success: %v", task, success)
 				// task completed, return worker, and break
 				go func(){registerChan <- worker} () //return the worker async so it doesn't block on channel
 				if success {
